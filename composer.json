@@ -1,5 +1,6 @@
 {
-    "name": "srggroup/autorelatedproducts",
+    "name": "srggroup/m2-autorelatedproducts",
+    "type": "magento2-module",
     "require": {
         "php": ">7.2",
         "magento/module-backend": "^101.0",
@@ -8,8 +9,6 @@
     "require-dev": {
         "srggroup/srg_standards": "dev-master"
     },
-    "type": "magento2-module",
-    "version": "1.0.0",
     "license": [
         "OSL-3.0",
         "AFL-3.0"
