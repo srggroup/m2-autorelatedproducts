@@ -1,0 +1,37 @@
+{
+    "name": "srggroup/autorelatedproducts",
+    "require": {
+        "php": ">7.2",
+        "magento/module-backend": "^101.0",
+        "magento/module-catalog": "^103.0"
+    },
+    "require-dev": {
+        "srggroup/srg_standards": "dev-master"
+    },
+    "type": "magento2-module",
+    "version": "1.0.0",
+    "license": [
+        "OSL-3.0",
+        "AFL-3.0"
+    ],
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "Srg\\AutoRelatedProducts\\": ""
+        }
+    },
+    "minimum-stability": "alpha",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://repo.magento.com/"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/srggroup/srg_standards"
+        }
+    ]
+}
