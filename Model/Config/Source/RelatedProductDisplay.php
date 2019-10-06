@@ -12,15 +12,18 @@ use Magento\Framework\Data\OptionSourceInterface;
  */
 class RelatedProductDisplay implements OptionSourceInterface {
 
+	const TYPE_MANUAL = 'manual';
+	const TYPE_REPLACE = 'replace';
+	const TYPE_MERGE = 'merge';
 
 	/**
 	 * @return array
 	 */
 	public function toOptionArray() {
 		return [
-			['value' => 'manual', 'label' => __('Manual Added Product')],
-			['value' => 'replace', 'label' => __('Replace Manual Added Products')],
-			['value' => 'merge', 'label' => __('Merge Products')]
+			['value' => self::TYPE_MANUAL, 'label' => __('Manual Added Product')],
+			['value' => self::TYPE_REPLACE, 'label' => __('Replace Manual Added Products')],
+			['value' => self::TYPE_MERGE, 'label' => __('Merge Products')]
 		];
 	}
 

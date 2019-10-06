@@ -1,14 +1,20 @@
 <?php
 namespace Srg\AutoRelatedProducts\Plugin\Block\Product\ProductList;
 
+use Magento\Framework\Data\CollectionFactory;
+use Magento\Catalog\Model\Product\Attribute\Source\Status;
+use Magento\Catalog\Model\Product\Visibility;
+use Magento\Catalog\Model\ResourceModel\Product\Collection as ProductCollection;
+use Magento\Framework\Data\Collection;
+use Magento\Framework\Exception\LocalizedException;
 use Srg\AutoRelatedProducts\Helper\Data;
 use Magento\Catalog\Model\CategoryFactory;
-use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory;
-use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
+use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Registry;
 use Magento\Framework\View\Element\Template\Context;
 use Magento\Store\Model\StoreManagerInterface;
+use Srg\AutoRelatedProducts\Model\Config\Source\RelatedProductDisplay;
 
 /**
  * Class Related
@@ -45,25 +51,25 @@ class Related {
 	protected $action;
 
 	/**
-	 * @var Configurable
-	 */
-	protected $configurable;
-
-	/**
 	 * @var StoreManagerInterface
 	 */
 	protected $storeManager;
+
+	/**
+	 * @var CollectionFactory
+	 */
+	private $collectionFactory;
 
 
 	/**
 	 * Related constructor.
 	 *
-	 * @param Context             $context
-	 * @param CategoryFactory                                              $categoryFactory
-	 * @param Registry                                                     $registry
-	 * @param CollectionFactory                                            $productCollectionFactory
-	 * @param Configurable $configurable
-	 * @param Data                                                         $dataHelper
+	 * @param Context                  $context
+	 * @param CategoryFactory          $categoryFactory
+	 * @param Registry                 $registry
+	 * @param ProductCollectionFactory $productCollectionFactory
+	 * @param CollectionFactory        $collectionFactory
+	 * @param Data                     $dataHelper
 	 *
 	 * @throws NoSuchEntityException
 	 */
@@ -71,17 +77,17 @@ class Related {
 		Context $context,
 		CategoryFactory $categoryFactory,
 		Registry $registry,
-		CollectionFactory $productCollectionFactory,
-		Configurable $configurable,
+		ProductCollectionFactory $productCollectionFactory,
+		CollectionFactory $collectionFactory,
 		Data $dataHelper
 	) {
 		$this->categoryFactory = $categoryFactory;
 		$this->registry = $registry;
 		$this->productCollectionFactory = $productCollectionFactory;
-		$this->configurable = $configurable;
 		$this->dataHelper = $dataHelper;
 		$this->storeManager = $context->getStoreManager();
-		$this->action = '';
+		$this->action = $this->dataHelper->getRelatedDisplayFilter();
+		$this->collectionFactory = $collectionFactory;
 
 		$_time = $this->dataHelper->getCacheTime();
 		if ($_time > 0 && $cacheKey = $this->cacheKey()) {
@@ -109,26 +115,19 @@ class Related {
 
 	/**
 	 * @param \Magento\Catalog\Block\Product\ProductList\Related $subject
-	 * @param                                                    $result
+	 * @param ProductCollection                                  $result
 	 *
 	 * @return mixed
 	 * @throws NoSuchEntityException
+	 * @throws LocalizedException
 	 */
-	public function afterGetItems(
-		\Magento\Catalog\Block\Product\ProductList\Related $subject,
-		$result
-	) {
+	public function afterGetItems(\Magento\Catalog\Block\Product\ProductList\Related $subject, $result) {
 		if ($this->dataHelper->isEnabled()) {
-			$relatedDisplay = $this->dataHelper->getRelatedDisplayFilter();
-			if ($relatedDisplay == "manual") {
-				return $result;
-			} elseif ($relatedDisplay == "replace") {
-				$this->action = $relatedDisplay;
+			if ($this->action == RelatedProductDisplay::TYPE_MERGE) {
 				$collection = $this->getRelatedProductsCollection($result);
 				return $collection;
-			} else {
-				$this->action = $relatedDisplay;
-				$collection = $this->getRelatedProductsCollection($result);
+			} elseif ($this->action == RelatedProductDisplay::TYPE_REPLACE) {
+				$collection = $this->getRelatedProductsCollection();
 				return $collection;
 			}
 		}
@@ -137,46 +136,63 @@ class Related {
 
 
 	/**
-	 * @param $loadedCollection
+	 * @param ProductCollection $mergeWith
 	 *
-	 * @return mixed
+	 * @return ProductCollection
 	 * @throws NoSuchEntityException
+	 * @throws LocalizedException
 	 */
-	private function getRelatedProductsCollection($loadedCollection) {
+	private function getRelatedProductsCollection($mergeWith = null) {
 		$product = $this->registry->registry('current_product');
 	   
-		if ($product->getTypeId() === 'configurable') {
-			$price = $product->getFinalPrice();
-		} else {
-			$price = $product->getFinalPrice();
-		}
-		
-		$attributes = $product->getAttributes();
+		$price = $product->getFinalPrice();
+
 		$productCount = $this->dataHelper->getProductsCount();
 
-		if ($this->dataHelper->getCategoryFilter() == "same") {
+		if ($mergeWith instanceof ProductCollection) {
+			$productCount = max(0, $productCount - $mergeWith->getSize());
+		}
+
+		if ($this->dataHelper->getCategoryFilter() == 'same') {
 			$productCategories = $this->getProductCategories($product);
 			$categoryId = end($productCategories);
 			$category = $this->categoryFactory->create()->load($categoryId);
-			$product_collection = $category->getProductCollection()->addAttributeToSelect('*')->addStoreFilter($this->storeManager->getStore());
+			$productCollection = $category->getProductCollection()->addAttributeToSelect('*')->addStoreFilter($this->storeManager->getStore());
 		} else {
-			$product_collection = $this->getProductCollection();
-		}
-		if ($this->action == 'merge') {
-		}
-		if ($this->dataHelper->getPriceFilter() == "same") {
-			$product_collection->addFieldToFilter('price', ['eq' => $price]);
-		} elseif ($this->dataHelper->getPriceFilter() == "more") {
-			$product_collection->addFieldToFilter('price', array('gt' => $price));
-		} elseif ($this->dataHelper->getPriceFilter() == "less") {
-			$product_collection->addFieldToFilter('price', ['lt' => $price]);
+			$productCollection = $this->getProductCollection();
 		}
 
-		$product_collection->addAttributeToFilter('visibility', \Magento\Catalog\Model\Product\Visibility::VISIBILITY_BOTH);
-		$product_collection->addAttributeToFilter('status', \Magento\Catalog\Model\Product\Attribute\Source\Status::STATUS_ENABLED);
-		$product_collection->setPageSize($productCount);
-		$product_collection->getSelect()->orderRand();
-		return $product_collection;
+		if ($this->dataHelper->getPriceFilter() == 'same') {
+			$productCollection->addFieldToFilter('price', ['eq' => $price]);
+		} elseif ($this->dataHelper->getPriceFilter() == 'more') {
+			$productCollection->addFieldToFilter('price', array('gt' => $price));
+		} elseif ($this->dataHelper->getPriceFilter() == 'less') {
+			$productCollection->addFieldToFilter('price', ['lt' => $price]);
+		}
+
+		$productCollection->addAttributeToFilter('visibility', Visibility::VISIBILITY_BOTH);
+		$productCollection->addAttributeToFilter('status', Status::STATUS_ENABLED);
+		$productCollection->setPageSize($productCount);
+		$productCollection->getSelect()->orderRand();
+
+		if ($mergeWith instanceof ProductCollection) {
+			/** @var Collection $mergedCollection */
+			$mergedCollection = $this->collectionFactory->create();
+			foreach ($mergeWith as $product) {
+				if ($mergedCollection)
+					try {
+						$mergedCollection->addItem($product);
+					} catch (LocalizedException $e) {}
+			}
+			foreach ($productCollection as $product) {
+				try {
+					$mergedCollection->addItem($product);
+				} catch (LocalizedException $e) {}
+			}
+			return $mergedCollection;
+		}
+
+		return $productCollection;
 	}
 
 
@@ -191,14 +207,7 @@ class Related {
 
 
 	/**
-	 * @param $product
-	 */
-	public function getProductAttributes($product) {
-	}
-
-
-	/**
-	 * @return mixed
+	 * @return ProductCollection
 	 * @throws NoSuchEntityException
 	 */
 	public function getProductCollection() {
